@@ -69,7 +69,7 @@ EOF
 			if expr "$ADDR" : '^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
 				IPs+=$SEP$ADDR
 			else
-				IPs+=$SEP$(host -t A "$ADDR" | awk -vORS=, '{ print $4 }')
+				IPs+=$SEP$(host -t A "$ADDR" | awk '{ print $4 }' | paste -sd ",")
 			fi
 			SEP=,
 		done
