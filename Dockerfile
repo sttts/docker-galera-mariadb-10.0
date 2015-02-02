@@ -24,6 +24,8 @@ ADD conf.d/slow_query_log.cnf /etc/mysql/conf.d/slow_query_log.cnf
 
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+RUN apt-get -y install host
+
 EXPOSE 3306 4444 4567 4568
 ADD start /bin/start
 RUN chmod +x /bin/start
