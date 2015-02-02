@@ -1,0 +1,84 @@
+#!/bin/bash -ex
+
+function write_cluster_config() {
+	PEERS="$1"
+	cat >/etc/mysql/conf.d/cluster.cnf <<EOF
+[mysqld]
+query_cache_size=8000000
+query_cache_type=1
+binlog_format=ROW
+default-storage-engine=innodb
+innodb_autoinc_lock_mode=2
+innodb_flush_log_at_trx_commit=0
+bind-address=0.0.0.0
+
+# wsrep_provider_options="gcache.size=32G"
+wsrep_provider=/usr/lib/galera/libgalera_smm.so
+wsrep_sst_method=xtrabackup
+wsrep_cluster_address="gcomm://$PEERS"
+wsrep_cluster_name="${CLUSTER_NAME:-cluster}"
+wsrep_sst_auth=xtrabackup:$XTRABACKUP_PASSWORD
+EOF
+}
+
+if [ -z "$XTRABACKUP_PASSWORD" ]; then
+	echo "XTRABACKUP_PASSWORD not set"
+	exit 1
+fi
+
+if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+	echo "MYSQL_ROOT_PASSWORD not set"
+	exit 1
+fi
+
+export CLUSTERCHECK_PASSWORD=$(echo "$XTRABACKUP_PASSWORD" | sha256sum | awk '{print $1;}')
+
+case "$1" in
+	master)
+		write_cluster_config ""
+
+		# bootstrapping
+		if [ ! -f /var/lib/mysql/skip-cluster-bootstrapping ]; then
+			echo "Bootstrapping master"
+
+			cat >/tmp/bootstrap.sql <<EOF
+CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '$XTRABACKUP_PASSWORD';
+GRANT RELOAD,LOCK TABLES,REPLICATION CLIENT ON *.* TO 'xtrabackup'@'localhost';
+CREATE USER 'clustercheck'@'localhost' IDENTIFIED BY '$CLUSTERCHECK_PASSWORD';
+GRANT PROCESS ON *.* TO 'clustercheck'@'localhost';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%';
+UPDATE mysql.user SET Password=PASSWORD('$MYSQL_ROOT_PASSWORD') WHERE User='root';
+FLUSH PRIVILEGES;
+SHUTDOWN;
+EOF
+			/usr/bin/mysqld_safe --wsrep-new-cluster --skip-networking --console --init-file=/tmp/bootstrap.sql || (rm /tmp/bootstrap.sql; false)
+			rm -f /tmp/bootstrap.sql
+			touch /var/lib/mysql/skip-cluster-bootstrapping
+		fi
+
+		echo "Starting master"
+		;;
+	node)
+		echo "Starting node"
+		if [ -z "$2" ]; then
+			echo "Missing master node address"
+			exit 1
+		fi
+		IPs=""
+		SEP=""
+		for ADDR in ${2//,/ }; do
+			if expr "$ADDR" : '^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
+				IPs+=$SEP$ADDR
+			else
+				IPs+=$SEP$(host -t A "$ADDR" | awk -vORS=, '{ print $4 }')
+			fi
+			SEP=,
+			write_cluster_config "$2"
+		done
+		;;
+	*)
+		echo "master|node <master node>"
+		exit 1
+esac
+
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
