@@ -59,7 +59,6 @@ EOF
 		echo "Starting master"
 		;;
 	node)
-		echo "Starting node"
 		if [ -z "$2" ]; then
 			echo "Missing master node address"
 			exit 1
@@ -73,8 +72,9 @@ EOF
 				IPs+=$SEP$(host -t A "$ADDR" | awk -vORS=, '{ print $4 }')
 			fi
 			SEP=,
-			write_cluster_config "$2"
 		done
+		write_cluster_config "$IPs"
+		echo "Starting node, connecting to $IPs"
 		;;
 	*)
 		echo "master|node <master node>"
