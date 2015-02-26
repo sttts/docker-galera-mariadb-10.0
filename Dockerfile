@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 RUN echo "deb http://archive.ubuntu.com/ubuntu trusty main universe" > /etc/apt/sources.list
 RUN apt-get -y update
-RUN apt-get -y install software-properties-common curl supervisor python-pip
+RUN apt-get -y install software-properties-common curl supervisor python-pip host
 RUN apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xcbcb082a1bb943db
 RUN add-apt-repository 'deb http://ftp.hosteurope.de/mirror/mariadb.org/repo/10.0/ubuntu trusty main'
 RUN apt-get -y update
@@ -23,8 +23,6 @@ ADD conf.d/timezone.cnf /etc/mysql/conf.d/timezone.cnf
 ADD conf.d/slow_query_log.cnf /etc/mysql/conf.d/slow_query_log.cnf
 
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-RUN apt-get -y install host
 
 EXPOSE 3306 4444 4567 4568
 ADD start /bin/start
