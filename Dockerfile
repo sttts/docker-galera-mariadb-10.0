@@ -12,8 +12,8 @@ RUN apt-get -y update
 RUN apt-get -y install mariadb-galera-server galera mariadb-client xtrabackup socat unzip
 RUN pip install supervisor-stdout
 
-RUN curl -f -L -o/bin/galera-healthcheck 'https://github.com/sttts/galera-healthcheck/releases/download/20150102/galera-healthcheck_linux_amd64'
-RUN test "$(sha256sum /bin/galera-healthcheck | awk '{print $1;}')" = "67ea137fa077d345c8d767d5c5037d3b69f865727c9357345bc24ac1ad319bc6"
+RUN curl -f -L -o/bin/galera-healthcheck 'https://github.com/sttts/galera-healthcheck/releases/download/v20150226/galera-healthcheck_linux_amd64'
+RUN test "$(sha256sum /bin/galera-healthcheck | awk '{print $1;}')" = "3faba212ab19c8cb1dacf119425033d649c7c4e567834d19021ccc231f356f99"
 RUN chmod +x /bin/galera-healthcheck
 
 RUN sed -i 's/#? *bind-address/# bind-address/' /etc/mysql/my.cnf
