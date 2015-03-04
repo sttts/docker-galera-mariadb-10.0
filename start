@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 if [ -z "$XTRABACKUP_PASSWORD" ]; then
 	echo "XTRABACKUP_PASSWORD not set"
@@ -48,9 +48,9 @@ EOF
 		SEP=""
 		for ADDR in ${ADDRS//,/ }; do
 			if expr "$ADDR" : '^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
-				QCOMM+=$SEP$ADDR
+				QCOMM+="$SEP$ADDR"
 			else
-				QCOMM+=$SEP$(host -t A "$ADDR" | awk '{ print $4 }' | paste -sd ",")
+				QCOMM+="$SEP$(host -t A "$ADDR" | awk '{ print $4 }' | paste -sd ",")"
 			fi
 			SEP=,
 		done
