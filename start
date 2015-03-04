@@ -1,26 +1,23 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 if [ -z "$XTRABACKUP_PASSWORD" ]; then
 	echo "XTRABACKUP_PASSWORD not set"
 	exit 1
 fi
 
-if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
-	echo "MYSQL_ROOT_PASSWORD not set"
-	exit 1
-fi
-
 CLUSTERCHECK_PASSWORD=$(echo "$XTRABACKUP_PASSWORD" | sha256sum | awk '{print $1;}')
 QCOMM=""
 CLUSTER_NAME=${CLUSTER_NAME:-cluster}
+MYSQL_MODE_ARGS=""
 
 case "$1" in
 	seed)
-		shift 1
-
 		# bootstrapping
 		if [ ! -f /var/lib/mysql/skip-cluster-bootstrapping ]; then
-			echo "Bootstrapping cluster"
+			if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+				MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32)
+				echo "MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD"
+			fi
 
 			cat >/tmp/bootstrap.sql <<EOF
 CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '$XTRABACKUP_PASSWORD';
@@ -30,15 +27,16 @@ GRANT PROCESS ON *.* TO 'clustercheck'@'localhost';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%';
 UPDATE mysql.user SET Password=PASSWORD('$MYSQL_ROOT_PASSWORD') WHERE User='root';
 FLUSH PRIVILEGES;
-SHUTDOWN;
 EOF
-			/usr/bin/mysqld_safe --skip-networking --console --init-file=/tmp/bootstrap.sql "$@" || (rm /tmp/bootstrap.sql; false)
-			rm -f /tmp/bootstrap.sql
+			MYSQL_MODE_ARGS+=" --init-file=/tmp/bootstrap.sql"
 			touch /var/lib/mysql/skip-cluster-bootstrapping
+
+			echo -n "Bootstrapping cluster. "
 		fi
 
-		MYSQL_MODE_ARGS="--wsrep-new-cluster"
+		MYSQL_MODE_ARGS+=" --wsrep-new-cluster"
 
+		shift 1
 		echo "Starting seed node"
 		;;
 	node)
@@ -46,7 +44,6 @@ EOF
 			echo "Missing master node address"
 			exit 1
 		fi
-		shift 2
 		ADDRS="$2"
 		SEP=""
 		for ADDR in ${ADDRS//,/ }; do
@@ -57,8 +54,8 @@ EOF
 			fi
 			SEP=,
 		done
-		MYSQL_ARGS=
-		write_cluster_config "$IPs"
+
+		shift 2
 		echo "Starting node, connecting to $IPs"
 		;;
 	*)
@@ -76,7 +73,7 @@ function shutdown () {
 trap shutdown TERM INT
 
 /bin/galera-healthcheck -password="$CLUSTERCHECK_PASSWORD" -pidfile=/var/run/galera-healthcheck.pid -user clustercheck &
-/usr/bin/mysqld_safe --console \
+/mysqld.sh --console \
 	$MYSQL_MODE_ARGS \
 	--wsrep_cluster_name="$CLUSTER_NAME" \
 	--wsrep_cluster_address="gcomm://$QCOMM" \

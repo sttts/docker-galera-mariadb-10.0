@@ -25,6 +25,8 @@ ADD conf.d/utf8.cnf /etc/mysql/conf.d/utf8.cnf
 ADD conf.d/galera.cnf /etc/mysql/conf.d/galera.cnf
 
 EXPOSE 3306 4444 4567 4568
-ADD start /bin/start
-RUN chmod +x /bin/start
-ENTRYPOINT ["/bin/start"]
+VOLUME ["/var/lib/mysql"]
+COPY mysqld.sh /mysqld.sh
+COPY start /start
+RUN chmod 555 /start /mysqld.sh
+ENTRYPOINT ["/start"]
