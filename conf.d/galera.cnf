@@ -1,0 +1,11 @@
+[mysqld]
+query_cache_size=8000000
+query_cache_type=1
+binlog_format=ROW
+default-storage-engine=innodb
+innodb_autoinc_lock_mode=2
+innodb_flush_log_at_trx_commit=0
+bind-address=0.0.0.0
+
+wsrep_provider=/usr/lib/galera/libgalera_smm.so
+wsrep_sst_method=xtrabackup

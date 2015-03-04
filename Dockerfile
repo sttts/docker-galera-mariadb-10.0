@@ -22,8 +22,7 @@ RUN chmod +x /bin/galera-healthcheck
 RUN sed -i 's/#? *bind-address/# bind-address/' /etc/mysql/my.cnf
 RUN sed -i 's/#? *log-error/# log-error/' /etc/mysql/my.cnf
 ADD conf.d/utf8.cnf /etc/mysql/conf.d/utf8.cnf
-ADD conf.d/timezone.cnf /etc/mysql/conf.d/timezone.cnf
-ADD conf.d/slow_query_log.cnf /etc/mysql/conf.d/slow_query_log.cnf
+ADD conf.d/galera.cnf /etc/mysql/conf.d/galera.cnf
 
 EXPOSE 3306 4444 4567 4568
 ADD start /bin/start

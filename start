@@ -1,26 +1,5 @@
 #!/bin/bash -ex
 
-function write_cluster_config() {
-	PEERS="$1"
-	cat >/etc/mysql/conf.d/cluster.cnf <<EOF
-[mysqld]
-query_cache_size=8000000
-query_cache_type=1
-binlog_format=ROW
-default-storage-engine=innodb
-innodb_autoinc_lock_mode=2
-innodb_flush_log_at_trx_commit=0
-bind-address=0.0.0.0
-
-# wsrep_provider_options="gcache.size=32G"
-wsrep_provider=/usr/lib/galera/libgalera_smm.so
-wsrep_sst_method=xtrabackup
-wsrep_cluster_address="gcomm://$PEERS"
-wsrep_cluster_name="${CLUSTER_NAME:-cluster}"
-wsrep_sst_auth=xtrabackup:$XTRABACKUP_PASSWORD
-EOF
-}
-
 if [ -z "$XTRABACKUP_PASSWORD" ]; then
 	echo "XTRABACKUP_PASSWORD not set"
 	exit 1
@@ -31,11 +10,13 @@ if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
 	exit 1
 fi
 
-export CLUSTERCHECK_PASSWORD=$(echo "$XTRABACKUP_PASSWORD" | sha256sum | awk '{print $1;}')
+CLUSTERCHECK_PASSWORD=$(echo "$XTRABACKUP_PASSWORD" | sha256sum | awk '{print $1;}')
+QCOMM=""
+CLUSTER_NAME=${CLUSTER_NAME:-cluster}
 
 case "$1" in
 	seed)
-		write_cluster_config ""
+		shift 1
 
 		# bootstrapping
 		if [ ! -f /var/lib/mysql/skip-cluster-bootstrapping ]; then
@@ -51,10 +32,12 @@ UPDATE mysql.user SET Password=PASSWORD('$MYSQL_ROOT_PASSWORD') WHERE User='root
 FLUSH PRIVILEGES;
 SHUTDOWN;
 EOF
-			/usr/bin/mysqld_safe --wsrep-new-cluster --skip-networking --console --init-file=/tmp/bootstrap.sql || (rm /tmp/bootstrap.sql; false)
+			/usr/bin/mysqld_safe --skip-networking --console --init-file=/tmp/bootstrap.sql "$@" || (rm /tmp/bootstrap.sql; false)
 			rm -f /tmp/bootstrap.sql
 			touch /var/lib/mysql/skip-cluster-bootstrapping
 		fi
+
+		MYSQL_MODE_ARGS="--wsrep-new-cluster"
 
 		echo "Starting seed node"
 		;;
@@ -63,16 +46,18 @@ EOF
 			echo "Missing master node address"
 			exit 1
 		fi
-		IPs=""
+		shift 2
+		ADDRS="$2"
 		SEP=""
-		for ADDR in ${2//,/ }; do
+		for ADDR in ${ADDRS//,/ }; do
 			if expr "$ADDR" : '^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
-				IPs+=$SEP$ADDR
+				QCOMM+=$SEP$ADDR
 			else
-				IPs+=$SEP$(host -t A "$ADDR" | awk '{ print $4 }' | paste -sd ",")
+				QCOMM+=$SEP$(host -t A "$ADDR" | awk '{ print $4 }' | paste -sd ",")
 			fi
 			SEP=,
 		done
+		MYSQL_ARGS=
 		write_cluster_config "$IPs"
 		echo "Starting node, connecting to $IPs"
 		;;
@@ -91,7 +76,13 @@ function shutdown () {
 trap shutdown TERM INT
 
 /bin/galera-healthcheck -password="$CLUSTERCHECK_PASSWORD" -pidfile=/var/run/galera-healthcheck.pid -user clustercheck &
-/usr/sbin/mysqld --console &
+/usr/bin/mysqld_safe --console \
+	$MYSQL_MODE_ARGS \
+	--wsrep_cluster_name="$CLUSTER_NAME" \
+	--wsrep_cluster_address="gcomm://$QCOMM" \
+	--wsrep_sst_auth="xtrabackup:$XTRABACKUP_PASSWORD" \
+	--default-time-zone="+00:00" \
+	"$@" 2>&1 &
 wait $!
 RC=$?
 
