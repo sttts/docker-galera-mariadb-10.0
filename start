@@ -56,7 +56,7 @@ EOF
 		done
 
 		shift 2
-		echo "Starting node, connecting to $IPs"
+		echo "Starting node, connecting to qcomm://$QCOMM"
 		;;
 	*)
 		echo "seed|node <othernode>,..."
