@@ -34,12 +34,12 @@ fi
 export CLUSTERCHECK_PASSWORD=$(echo "$XTRABACKUP_PASSWORD" | sha256sum | awk '{print $1;}')
 
 case "$1" in
-	master)
+	seed)
 		write_cluster_config ""
 
 		# bootstrapping
 		if [ ! -f /var/lib/mysql/skip-cluster-bootstrapping ]; then
-			echo "Bootstrapping master"
+			echo "Bootstrapping cluster"
 
 			cat >/tmp/bootstrap.sql <<EOF
 CREATE USER 'xtrabackup'@'localhost' IDENTIFIED BY '$XTRABACKUP_PASSWORD';
@@ -56,7 +56,7 @@ EOF
 			touch /var/lib/mysql/skip-cluster-bootstrapping
 		fi
 
-		echo "Starting master"
+		echo "Starting seed node"
 		;;
 	node)
 		if [ -z "$2" ]; then
@@ -77,8 +77,24 @@ EOF
 		echo "Starting node, connecting to $IPs"
 		;;
 	*)
-		echo "master|node <master node>"
+		echo "seed|node <othernode>,..."
 		exit 1
 esac
 
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+# start processes
+set +e -m
+
+function shutdown () {
+	echo Shutting down
+	test -s /var/run/mysql/mysqld.pid && kill -TERM $(cat /var/run/mysql/mysqld.pid)
+}
+trap shutdown TERM INT
+
+/bin/galera-healthcheck -password="$CLUSTERCHECK_PASSWORD" -pidfile=/var/run/galera-healthcheck.pid -user clustercheck &
+/usr/sbin/mysqld --console &
+wait $!
+RC=$?
+
+test -s /var/run/galera-healthcheck.pid && kill $(cat /var/run/galera-healthcheck.pid)
+
+exit $RC
