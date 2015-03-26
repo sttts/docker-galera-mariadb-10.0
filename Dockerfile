@@ -11,7 +11,7 @@ RUN apt-get -y update
 
 # install packages
 RUN apt-get -y --no-install-recommends --no-install-suggests install host socat unzip ca-certificates wget
-RUN apt-get -y install mariadb-galera-server galera mariadb-client xtrabackup
+RUN apt-get -y install mariadb-galera-server-10.0 galera-3 mariadb-client xtrabackup
 
 # install galera-healthcheck
 RUN wget -O /bin/galera-healthcheck 'https://github.com/sttts/galera-healthcheck/releases/download/v20150303/galera-healthcheck_linux_amd64'
