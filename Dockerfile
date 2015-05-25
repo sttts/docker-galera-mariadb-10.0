@@ -23,6 +23,8 @@ RUN sed -i 's/#? *bind-address/# bind-address/' /etc/mysql/my.cnf
 RUN sed -i 's/#? *log-error/# log-error/' /etc/mysql/my.cnf
 ADD conf.d/utf8.cnf /etc/mysql/conf.d/utf8.cnf
 ADD conf.d/galera.cnf /etc/mysql/conf.d/galera.cnf
+RUN chmod 0644 /etc/mysql/conf.d/utf8.cnf
+RUN chmod 0644 /etc/mysql/conf.d/galera.cnf
 
 EXPOSE 3306 4444 4567 4568
 VOLUME ["/var/lib/mysql"]
